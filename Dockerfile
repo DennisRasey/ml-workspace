@@ -32,7 +32,7 @@ COPY resources/scripts/clean-layer.sh  /usr/bin/clean-layer.sh
 COPY resources/scripts/fix-permissions.sh  /usr/bin/fix-permissions.sh
 
  # Make clean-layer and fix-permissions executable
- RUN \
+RUN \
     chmod a+rwx /usr/bin/clean-layer.sh && \
     chmod a+rwx /usr/bin/fix-permissions.sh
 
@@ -331,26 +331,6 @@ ENV JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64"
 
 ### PROCESS TOOLS ###
 
-### Install xfce UI
-RUN \
-    apt-get update && \
-    # Install custom font
-    apt-get install -y xfce4 xfce4-terminal xterm && \
-    apt-get purge -y pm-utils xscreensaver* && \
-    # Cleanup
-    clean-layer.sh
-
-# Install rdp support via xrdp
-RUN \
-    apt-get update && \
-    apt-get install -y --no-install-recommends xrdp && \
-    # use xfce
-    sudo sed -i.bak '/fi/a #xrdp multiple users configuration \n xfce-session \n' /etc/xrdp/startwm.sh && \
-    # generate /etc/xrdp/rsakeys.ini
-    cd /etc/xrdp/ && xrdp-keygen xrdp && \
-    # Cleanup
-    clean-layer.sh
-
 # Install supervisor for process supervision
 RUN \
     apt-get update && \
@@ -366,82 +346,6 @@ RUN \
 
 ### END PROCESS TOOLS ###
 
-### GUI TOOLS ###
-# Install VNC
-RUN \
-    apt-get update  && \
-    # required for websockify
-    # apt-get install -y python-numpy  && \
-    cd ${RESOURCES_PATH} && \
-    # Tiger VNC
-    wget -qO- https://dl.bintray.com/tigervnc/stable/tigervnc-1.10.1.x86_64.tar.gz | tar xz --strip 1 -C / && \
-    # Install websockify
-    mkdir -p ./novnc/utils/websockify && \
-    # Before updating the noVNC version, we need to make sure that our monkey patching scripts still work!!
-    wget -qO- https://github.com/novnc/noVNC/archive/v1.1.0.tar.gz | tar xz --strip 1 -C ./novnc && \
-    # use older version of websockify to prevent hanging connections on offline containers?, see https://github.com/ConSol/docker-headless-vnc-container/issues/50
-    wget -qO- https://github.com/novnc/websockify/archive/v0.9.0.tar.gz | tar xz --strip 1 -C ./novnc/utils/websockify && \
-    chmod +x -v ./novnc/utils/*.sh && \
-    # create user vnc directory
-    mkdir -p $HOME/.vnc && \
-    # Fix permissions
-    fix-permissions.sh ${RESOURCES_PATH} && \
-    # Cleanup
-    clean-layer.sh
-
-# Install Terminal / GDebi (Package Manager) / Glogg (Stream file viewer) & archive tools
-# Discover Tools:
-# https://wiki.ubuntuusers.de/Startseite/
-# https://wiki.ubuntuusers.de/Xfce_empfohlene_Anwendungen/
-# https://goodies.xfce.org/start
-# https://linux.die.net/man/1/
-RUN \
-    apt-get update && \
-    # Configuration database - required by git kraken / atom and other tools (1MB)
-    apt-get install -y --no-install-recommends gconf2 && \
-    apt-get install -y --no-install-recommends xfce4-terminal && \
-    apt-get install -y --no-install-recommends --allow-unauthenticated xfce4-taskmanager  && \
-    # Install gdebi deb installer
-    apt-get install -y --no-install-recommends gdebi && \
-    # Search for files
-    apt-get install -y --no-install-recommends catfish && \
-    # TODO: Unable to locate package:  apt-get install -y --no-install-recommends gnome-search-tool && 
-    apt-get install -y --no-install-recommends font-manager && \
-    # vs support for thunar
-    apt-get install -y thunar-vcs-plugin && \
-    # Streaming text editor for large files
-    apt-get install -y --no-install-recommends glogg  && \
-    apt-get install -y --no-install-recommends baobab && \
-    # Lightweight text editor
-    apt-get install -y mousepad && \
-    apt-get install -y --no-install-recommends vim && \
-    # Install bat - colored cat: https://github.com/sharkdp/bat
-    wget -q https://github.com/sharkdp/bat/releases/download/v0.12.1/bat_0.12.1_amd64.deb -O $RESOURCES_PATH/bat.deb && \
-    dpkg -i $RESOURCES_PATH/bat.deb && \
-    rm $RESOURCES_PATH/bat.deb && \
-    # Process monitoring
-    apt-get install -y htop && \
-    # Install Archive/Compression Tools: https://wiki.ubuntuusers.de/Archivmanager/
-    apt-get install -y p7zip p7zip-rar && \
-    apt-get install -y --no-install-recommends thunar-archive-plugin && \
-    apt-get install -y xarchiver && \
-    # DB Utils
-    apt-get install -y --no-install-recommends sqlitebrowser && \
-    # Install nautilus and support for sftp mounting
-    apt-get install -y --no-install-recommends nautilus gvfs-backends && \
-    # Install gigolo - Access remote systems
-    apt-get install -y --no-install-recommends gigolo gvfs-bin && \
-    # xfce systemload panel plugin - needs to be activated
-    apt-get install -y --no-install-recommends xfce4-systemload-plugin && \
-    # Leightweight ftp client that supports sftp, http, ...
-    apt-get install -y --no-install-recommends gftp && \
-    # Install chrome
-    apt-get install -y chromium-browser chromium-browser-l10n chromium-codecs-ffmpeg && \
-    ln -s /usr/bin/chromium-browser /usr/bin/google-chrome && \
-    # Cleanup
-    # Large package: gnome-user-guide 50MB app-install-data 50MB
-    apt-get remove -y app-install-data gnome-user-guide && \ 
-    clean-layer.sh
 
 # Add the defaults from /lib/x86_64-linux-gnu, otherwise lots of no version errors
 # cannot be added above otherwise there are errors in the installation of the gui tools
@@ -465,20 +369,20 @@ RUN \
     clean-layer.sh
 
 ## netdata
-COPY resources/tools/netdata.sh $RESOURCES_PATH/tools/netdata.sh
-RUN \
-    /bin/bash $RESOURCES_PATH/tools/netdata.sh --install && \
-    # Cleanup
-    clean-layer.sh
+#COPY resources/tools/netdata.sh $RESOURCES_PATH/tools/netdata.sh
+#RUN \
+#    /bin/bash $RESOURCES_PATH/tools/netdata.sh --install && \
+#    # Cleanup
+#    clean-layer.sh
 
 ## Glances webtool is installed in python section below
 
 ## Filebrowser
-COPY resources/tools/filebrowser.sh $RESOURCES_PATH/tools/filebrowser.sh
-RUN \
-    /bin/bash $RESOURCES_PATH/tools/filebrowser.sh --install && \
-    # Cleanup
-    clean-layer.sh
+#COPY resources/tools/filebrowser.sh $RESOURCES_PATH/tools/filebrowser.sh
+#RUN \
+#    /bin/bash $RESOURCES_PATH/tools/filebrowser.sh --install && \
+#    # Cleanup
+#    clean-layer.sh
 
 ARG ARG_WORKSPACE_FLAVOR="full"
 ENV WORKSPACE_FLAVOR=$ARG_WORKSPACE_FLAVOR
@@ -494,18 +398,6 @@ RUN \
     # Cleanup
     clean-layer.sh
 
-# Install Firefox
-
-COPY resources/tools/firefox.sh $RESOURCES_PATH/tools/firefox.sh
-
-RUN \
-    # If minimal flavor - do not install
-    if [ "$WORKSPACE_FLAVOR" = "minimal" ]; then \
-        exit 0 ; \
-    fi && \
-    /bin/bash $RESOURCES_PATH/tools/firefox.sh --install && \
-    # Cleanup
-    clean-layer.sh
 
 ### END GUI TOOLS ###
 
@@ -967,8 +859,8 @@ RUN \
     echo "[Desktop Entry]\nVersion=1.0\nType=Link\nName=Glances\nComment=Hardware Monitoring\nCategories=System;Utility;\nIcon=/resources/icons/glances-icon.png\nURL=http://localhost:8092/tools/glances" > /usr/share/applications/glances.desktop && \
     chmod +x /usr/share/applications/glances.desktop && \
     # Remove mail and logout desktop icons
-    rm /usr/share/applications/exo-mail-reader.desktop && \
-    rm /usr/share/applications/xfce4-session-logout.desktop
+    rm -f /usr/share/applications/exo-mail-reader.desktop && \
+    rm -f /usr/share/applications/xfce4-session-logout.desktop
 
 # Copy resources into workspace
 COPY resources/tools $RESOURCES_PATH/tools
