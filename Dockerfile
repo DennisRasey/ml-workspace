@@ -259,6 +259,7 @@ RUN CONDA_VERSION="4.8.2" && \
     $CONDA_DIR/bin/conda install -y conda-build && \
     # Add conda forge - Append so that conda forge has lower priority than the main channel
     $CONDA_DIR/bin/conda config --system --add channels conda-forge && \
+    $CONDA_DIR/bin/conda config --system --append channels conda && \
     $CONDA_DIR/bin/conda config --system --set auto_update_conda true && \
     $CONDA_DIR/bin/conda config --system --set show_channel_urls true && \
     # Update selected packages - install python 3.7.x
