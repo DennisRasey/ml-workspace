@@ -248,7 +248,7 @@ ENV \
     PYTHON_VERSION="3.7.6" \
     CONDA_PYTHON_DIR=/opt/conda/lib/python3.7
 
-RUN CONDA_VERSION="4.7.12" && \
+RUN CONDA_VERSION="4.8.2" && \
     wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-${CONDA_VERSION}-Linux-x86_64.sh -O ~/miniconda.sh && \
     /bin/bash ~/miniconda.sh -b -p $CONDA_DIR && \
     export PATH=$CONDA_DIR/bin:$PATH && \
@@ -258,8 +258,8 @@ RUN CONDA_VERSION="4.7.12" && \
     $CONDA_DIR/bin/conda update -y setuptools && \
     $CONDA_DIR/bin/conda install -y conda-build && \
     # Add conda forge - Append so that conda forge has lower priority than the main channel
-    $CONDA_DIR/bin/conda config --system --append channels conda-forge && \
-    $CONDA_DIR/bin/conda config --system --set auto_update_conda false && \
+    $CONDA_DIR/bin/conda config --system --add channels conda-forge && \
+    $CONDA_DIR/bin/conda config --system --set auto_update_conda true && \
     $CONDA_DIR/bin/conda config --system --set show_channel_urls true && \
     # Update selected packages - install python 3.7.x
     $CONDA_DIR/bin/conda install -y --update-all python=$PYTHON_VERSION && \
