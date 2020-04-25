@@ -121,6 +121,8 @@ RUN \
 
 EXPOSE 8888
 
+ENV PATH=$CONDA_DIR/bin:$PATH
+
 # setting NotebookApp.token to null disables tokens & passwords
 CMD [ "jupyter-lab", "--ip=0.0.0.0", "--allow-root", "--NotebookApp.token=\"\"" ]
 
