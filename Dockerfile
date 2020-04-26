@@ -58,12 +58,10 @@ RUN \
     # TODO add repos?
     # add-apt-repository ppa:apt-fast/stable
     # add-apt-repository 'deb http://security.ubuntu.com/ubuntu xenial-security main'
-    apt-get update --fix-missing && \
-    apt-get install -y sudo apt-utils && \
-    apt-get upgrade -y && \
-    apt-get update && \
+    apt-get update && apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
-        # This is necessary for apt to access HTTPS sources: 
+        sudo \
+        apt-utils \
         apt-transport-https \
         gnupg-agent \
         gpg-agent \
@@ -81,21 +79,15 @@ RUN \
         openssl \
         iproute2 \
         psmisc \
-        tmux \
         dpkg-sig \
         uuid-dev \
-        csh \
-        xclip \
         clinfo \
-        libgdbm-dev \
         libncurses5-dev \
         gawk \
         # Simplified Wrapper and Interface Generator (5.8MB) - required by lots of py-libs
         swig \
         # Graphviz (graph visualization software) (4MB)
         graphviz libgraphviz-dev \
-        # Terminal multiplexer
-        screen \
         # Editor
         nano \
         # Find files
@@ -112,15 +104,10 @@ RUN \
         libhiredis-dev \
         # postgresql client
         libpq-dev \
-        # mysql client (10MB)
-        libmysqlclient-dev \
-        # mariadb client (7MB)
-        # libmariadbclient-dev \
         # image processing library (6MB), required for tesseract
         libleptonica-dev \
         # GEOS library (3MB)
         libgeos-dev \
-        # style sheet preprocessor
         less \
         # Print dir tree
         tree \
@@ -133,8 +120,6 @@ RUN \
         rsync \
         # VCS:
         git \
-        subversion \
-        jed \
         # odbc drivers
         unixodbc unixodbc-dev \
         # Image support
@@ -157,7 +142,7 @@ RUN \
         libtool \
         cmake  \
         fonts-liberation \
-        google-perftools \
+        #google-perftools \
         # Compression Libs
         # also install rar/unrar? but both are propriatory or unar (40MB)
         zip \
@@ -258,7 +243,7 @@ RUN CONDA_VERSION="4.7.12" && \
     $CONDA_DIR/bin/conda update -y setuptools && \
     $CONDA_DIR/bin/conda install -y conda-build && \
     # Add conda forge - Append so that conda forge has lower priority than the main channel
-    $CONDA_DIR/bin/conda config --system --append channels conda-forge && \
+    $CONDA_DIR/bin/conda config --system --add channels conda-forge && \
     $CONDA_DIR/bin/conda config --system --set auto_update_conda false && \
     $CONDA_DIR/bin/conda config --system --set show_channel_urls true && \
     # Update selected packages - install python 3.7.x
@@ -315,41 +300,9 @@ RUN \
 
 ENV PATH=/opt/node/bin:$PATH
 
-# Install Java Runtime
-RUN \
-    apt-get update && \
-    # libgl1-mesa-dri > 150 MB -> Install jdk-headless version (without gui support)?
-    # java runtime is extenable via the java-utils.sh tool intstaller script
-    apt-get install -y --no-install-recommends openjdk-11-jdk maven scala && \
-    # Cleanup
-    clean-layer.sh
-
-ENV JAVA_HOME="/usr/lib/jvm/java-11-openjdk-amd64" 
-# TODO add MAVEN_HOME?
-
 ### END RUNTIMES ###
 
 ### PROCESS TOOLS ###
-
-### Install xfce UI
-RUN \
-    apt-get update && \
-    # Install custom font
-    apt-get install -y xfce4 xfce4-terminal xterm && \
-    apt-get purge -y pm-utils xscreensaver* && \
-    # Cleanup
-    clean-layer.sh
-
-# Install rdp support via xrdp
-RUN \
-    apt-get update && \
-    apt-get install -y --no-install-recommends xrdp && \
-    # use xfce
-    sudo sed -i.bak '/fi/a #xrdp multiple users configuration \n xfce-session \n' /etc/xrdp/startwm.sh && \
-    # generate /etc/xrdp/rsakeys.ini
-    cd /etc/xrdp/ && xrdp-keygen xrdp && \
-    # Cleanup
-    clean-layer.sh
 
 # Install supervisor for process supervision
 RUN \
@@ -367,88 +320,11 @@ RUN \
 ### END PROCESS TOOLS ###
 
 ### GUI TOOLS ###
-# Install VNC
-RUN \
-    apt-get update  && \
-    # required for websockify
-    # apt-get install -y python-numpy  && \
-    cd ${RESOURCES_PATH} && \
-    # Tiger VNC
-    wget -qO- https://dl.bintray.com/tigervnc/stable/tigervnc-1.10.1.x86_64.tar.gz | tar xz --strip 1 -C / && \
-    # Install websockify
-    mkdir -p ./novnc/utils/websockify && \
-    # Before updating the noVNC version, we need to make sure that our monkey patching scripts still work!!
-    wget -qO- https://github.com/novnc/noVNC/archive/v1.1.0.tar.gz | tar xz --strip 1 -C ./novnc && \
-    # use older version of websockify to prevent hanging connections on offline containers?, see https://github.com/ConSol/docker-headless-vnc-container/issues/50
-    wget -qO- https://github.com/novnc/websockify/archive/v0.9.0.tar.gz | tar xz --strip 1 -C ./novnc/utils/websockify && \
-    chmod +x -v ./novnc/utils/*.sh && \
-    # create user vnc directory
-    mkdir -p $HOME/.vnc && \
-    # Fix permissions
-    fix-permissions.sh ${RESOURCES_PATH} && \
-    # Cleanup
-    clean-layer.sh
-
-# Install Terminal / GDebi (Package Manager) / Glogg (Stream file viewer) & archive tools
-# Discover Tools:
-# https://wiki.ubuntuusers.de/Startseite/
-# https://wiki.ubuntuusers.de/Xfce_empfohlene_Anwendungen/
-# https://goodies.xfce.org/start
-# https://linux.die.net/man/1/
-RUN \
-    apt-get update && \
-    # Configuration database - required by git kraken / atom and other tools (1MB)
-    apt-get install -y --no-install-recommends gconf2 && \
-    apt-get install -y --no-install-recommends xfce4-terminal && \
-    apt-get install -y --no-install-recommends --allow-unauthenticated xfce4-taskmanager  && \
-    # Install gdebi deb installer
-    apt-get install -y --no-install-recommends gdebi && \
-    # Search for files
-    apt-get install -y --no-install-recommends catfish && \
-    # TODO: Unable to locate package:  apt-get install -y --no-install-recommends gnome-search-tool && 
-    apt-get install -y --no-install-recommends font-manager && \
-    # vs support for thunar
-    apt-get install -y thunar-vcs-plugin && \
-    # Streaming text editor for large files
-    apt-get install -y --no-install-recommends glogg  && \
-    apt-get install -y --no-install-recommends baobab && \
-    # Lightweight text editor
-    apt-get install -y mousepad && \
-    apt-get install -y --no-install-recommends vim && \
-    # Install bat - colored cat: https://github.com/sharkdp/bat
-    wget -q https://github.com/sharkdp/bat/releases/download/v0.12.1/bat_0.12.1_amd64.deb -O $RESOURCES_PATH/bat.deb && \
-    dpkg -i $RESOURCES_PATH/bat.deb && \
-    rm $RESOURCES_PATH/bat.deb && \
-    # Process monitoring
-    apt-get install -y htop && \
-    # Install Archive/Compression Tools: https://wiki.ubuntuusers.de/Archivmanager/
-    apt-get install -y p7zip p7zip-rar && \
-    apt-get install -y --no-install-recommends thunar-archive-plugin && \
-    apt-get install -y xarchiver && \
-    # DB Utils
-    apt-get install -y --no-install-recommends sqlitebrowser && \
-    # Install nautilus and support for sftp mounting
-    apt-get install -y --no-install-recommends nautilus gvfs-backends && \
-    # Install gigolo - Access remote systems
-    apt-get install -y --no-install-recommends gigolo gvfs-bin && \
-    # xfce systemload panel plugin - needs to be activated
-    apt-get install -y --no-install-recommends xfce4-systemload-plugin && \
-    # Leightweight ftp client that supports sftp, http, ...
-    apt-get install -y --no-install-recommends gftp && \
-    # Install chrome
-    apt-get install -y chromium-browser chromium-browser-l10n chromium-codecs-ffmpeg && \
-    ln -s /usr/bin/chromium-browser /usr/bin/google-chrome && \
-    # Cleanup
-    # Large package: gnome-user-guide 50MB app-install-data 50MB
-    apt-get remove -y app-install-data gnome-user-guide && \ 
-    clean-layer.sh
 
 # Add the defaults from /lib/x86_64-linux-gnu, otherwise lots of no version errors
 # cannot be added above otherwise there are errors in the installation of the gui tools
 # Call order: https://unix.stackexchange.com/questions/367600/what-is-the-order-that-linuxs-dynamic-linker-searches-paths-in
-ENV LD_LIBRARY_PATH=/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:$CONDA_DIR/lib 
-
-# Install Web Tools - Offered via Jupyter Tooling Plugin
+#ENV LD_LIBRARY_PATH=/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:$CONDA_DIR/lib 
 
 ## VS Code Server: https://github.com/codercom/code-server
 COPY resources/tools/vs-code-server.sh $RESOURCES_PATH/tools/vs-code-server.sh
@@ -457,57 +333,12 @@ RUN \
     # Cleanup
     clean-layer.sh
 
-## ungit
-COPY resources/tools/ungit.sh $RESOURCES_PATH/tools/ungit.sh
-RUN \
-    /bin/bash $RESOURCES_PATH/tools/ungit.sh --install && \
-    # Cleanup
-    clean-layer.sh
-
-## netdata
-COPY resources/tools/netdata.sh $RESOURCES_PATH/tools/netdata.sh
-RUN \
-    /bin/bash $RESOURCES_PATH/tools/netdata.sh --install && \
-    # Cleanup
-    clean-layer.sh
-
-## Glances webtool is installed in python section below
-
-## Filebrowser
-COPY resources/tools/filebrowser.sh $RESOURCES_PATH/tools/filebrowser.sh
-RUN \
-    /bin/bash $RESOURCES_PATH/tools/filebrowser.sh --install && \
-    # Cleanup
-    clean-layer.sh
-
-ARG ARG_WORKSPACE_FLAVOR="full"
-ENV WORKSPACE_FLAVOR=$ARG_WORKSPACE_FLAVOR
-
 # Install Visual Studio Code
 COPY resources/tools/vs-code-desktop.sh $RESOURCES_PATH/tools/vs-code-desktop.sh
 RUN \
-    # If minimal flavor - do not install
-    if [ "$WORKSPACE_FLAVOR" = "minimal" ]; then \
-        exit 0 ; \
-    fi && \
-    /bin/bash $RESOURCES_PATH/tools/vs-code-desktop.sh --install && \
-    # Cleanup
-    clean-layer.sh
-
-# Install Firefox
-
-COPY resources/tools/firefox.sh $RESOURCES_PATH/tools/firefox.sh
-
-RUN \
-    # If minimal flavor - do not install
-    if [ "$WORKSPACE_FLAVOR" = "minimal" ]; then \
-        exit 0 ; \
-    fi && \
-    /bin/bash $RESOURCES_PATH/tools/firefox.sh --install && \
-    # Cleanup
-    clean-layer.sh
-
-### END GUI TOOLS ###
+  /bin/bash $RESOURCES_PATH/tools/vs-code-desktop.sh --install && \
+  # Cleanup
+  clean-layer.sh
 
 ### DATA SCIENCE BASICS ###
 
@@ -527,14 +358,7 @@ RUN \
     apt-get update && \
     # upgrade pip
     pip install --upgrade pip && \
-    # If minimal flavor - install 
-    if [ "$WORKSPACE_FLAVOR" = "minimal" ]; then \
-        # Install nomkl - mkl needs lots of space
-        conda install -y --update-all nomkl ; \
-    else \
-        # Install mkl for faster computations
-        conda install -y --update-all mkl ; \
-    fi && \
+    conda install -y --update-all mkl ; \
     # Install some basics - required to run container
     conda install -y --update-all \
             'python='$PYTHON_VERSION \
@@ -560,9 +384,9 @@ RUN \
             cmake \
             joblib \
             Pillow \
-            'ipython=7.11.*' \
-            'notebook=6.0.*' \
-            'jupyterlab=1.2.*' \
+            ipython= \
+            notebook \
+            jupyterlab \
             # Selected by library evaluation
             networkx \
             click \
@@ -576,16 +400,6 @@ RUN \
             jmespath && \
     # Install minimal pip requirements
     pip install --no-cache-dir --upgrade -r ${RESOURCES_PATH}/libraries/requirements-minimal.txt && \
-    # If minimal flavor - exit here
-    if [ "$WORKSPACE_FLAVOR" = "minimal" ]; then \
-        # Remove pandoc - package for markdown conversion - not needed
-        conda remove -y --force pandoc && \
-        # Fix permissions
-        fix-permissions.sh $CONDA_DIR && \
-        # Cleanup
-        clean-layer.sh && \
-        exit 0 ; \
-    fi && \
     # OpenMPI support
     apt-get install -y --no-install-recommends libopenmpi-dev openmpi-bin && \
     # Install mkl, mkl-include & mkldnn
@@ -599,19 +413,9 @@ RUN \
     conda install -y -c pytorch "pytorch==1.4.*"  torchvision cpuonly && \
     # Install light pip requirements
     pip install --no-cache-dir --upgrade -r ${RESOURCES_PATH}/libraries/requirements-light.txt && \
-    # If light light flavor - exit here
-    if [ "$WORKSPACE_FLAVOR" = "light" ]; then \
-        # Fix permissions
-        fix-permissions.sh $CONDA_DIR && \
-        # Cleanup
-        clean-layer.sh && \
-        exit 0 ; \
-    fi && \
     # libartals == 40MB liblapack-dev == 20 MB
     apt-get install -y --no-install-recommends liblapack-dev libatlas-base-dev libeigen3-dev libblas-dev && \
     # pandoc -> installs libluajit -> problem for openresty
-    # HDF5 (19MB)
-    apt-get install -y libhdf5-dev && \
     # required for tesseract: 11MB - tesseract-ocr-dev?
     apt-get install -y libtesseract-dev && \
     # Install libjpeg turbo for speedup in image processing
@@ -656,12 +460,6 @@ RUN \
     jupyter nbextension enable --py jupytext && \
     # Disable Jupyter Server Proxy
     jupyter nbextension disable jupyter_server_proxy/tree && \
-    # If minimal flavor - exit here
-    if [ "$WORKSPACE_FLAVOR" = "minimal" ]; then \
-        # Cleanup
-        clean-layer.sh && \
-        exit 0 ; \
-    fi && \
     # Configure nbdime
     nbdime config-git --enable --global && \
     # Enable useful extensions
@@ -679,12 +477,6 @@ RUN \
     # Edit notebook config
     echo '{"nbext_hide_incompat": false}' > $HOME/.jupyter/nbconfig/common.json && \
     cat $HOME/.jupyter/nbconfig/notebook.json | jq '.toc2={"moveMenuLeft": false,"widenNotebook": false,"skip_h1_title": false,"sideBar": true,"number_sections": false,"collapse_to_match_collapsible_headings": true}' > tmp.$$.json && mv tmp.$$.json $HOME/.jupyter/nbconfig/notebook.json && \
-    # If light flavor - exit here
-    if [ "$WORKSPACE_FLAVOR" = "light" ]; then \
-        # Cleanup
-        clean-layer.sh && \
-        exit 0 ; \
-    fi && \
     # Activate qgrid
     jupyter nbextension enable --py --sys-prefix qgrid && \
     # Activate Colab support
@@ -705,17 +497,6 @@ RUN \
     lab_ext_install='jupyter labextension install -y --debug-log-path=/dev/stdout --log-level=WARN --minimize=False ' && \
     # jupyterlab installed in requirements section
     $lab_ext_install @jupyter-widgets/jupyterlab-manager && \
-    # If minimal flavor - do not install jupyterlab extensions
-    if [ "$WORKSPACE_FLAVOR" = "minimal" ]; then \
-        # Final build with minimization
-        jupyter lab build -y --debug-log-path=/dev/stdout --log-level=WARN && \
-        # Cleanup
-        jupyter lab clean && \
-        jlpm cache clean && \
-        rm -rf $CONDA_DIR/share/jupyter/lab/staging && \
-        clean-layer.sh && \
-        exit 0 ; \
-    fi && \
     $lab_ext_install @jupyterlab/toc && \
     $lab_ext_install jupyterlab_tensorboard && \
     # install jupyterlab git
@@ -724,22 +505,11 @@ RUN \
     jupyter serverextension enable --py jupyterlab_git && \
     # For Matplotlib: https://github.com/matplotlib/jupyter-matplotlib
     $lab_ext_install jupyter-matplotlib && \
-    # Do not install any other jupyterlab extensions
-    if [ "$WORKSPACE_FLAVOR" = "light" ]; then \
-        # Final build with minimization
-        jupyter lab build -y --debug-log-path=/dev/stdout --log-level=WARN && \
-        # Cleanup
-        jupyter lab clean && \
-        jlpm cache clean && \
-        rm -rf $CONDA_DIR/share/jupyter/lab/staging && \
-        clean-layer.sh && \
-        exit 0 ; \
-    fi && \
     # Install jupyterlab language server support
     pip install --pre jupyter-lsp && \
     $lab_ext_install @krassowski/jupyterlab-lsp && \
     # For Plotly
-    $lab_ext_install @jupyterlab/plotly-extension && \
+    #$lab_ext_install @jupyterlab/plotly-extension && \
     # produces build error: jupyter labextension install jupyterlab-chart-editor && \
     # For holoview
     $lab_ext_install @pyviz/jupyterlab_pyviz && \
@@ -845,36 +615,6 @@ RUN \
 
 ### END VSCODE ###
 
-### INCUBATION ZONE ### 
-
-RUN \
-    apt-get update && \
-    # Newer jedi makes trouble with jupyterlab-lsp
-    pip install --no-cache-dir jedi==0.15.2 && \
-    apt-get install -y xfce4-clipman && \
-    # required by rodeo ide (8MB)
-    # apt-get install -y libgconf2-4 && \
-    # required for pvporcupine (800kb)
-    # apt-get install -y portaudio19-dev && \
-    # Audio drivers for magenta? (3MB)
-    # apt-get install -y libasound2-dev libjack-dev && \
-    # libproj-dev required for cartopy (15MB)
-    # apt-get install -y libproj-dev && \
-    # mysql server: 150MB 
-    # apt-get install -y mysql-server && \
-   # If minimal or light flavor -> exit here
-    if [ "$WORKSPACE_FLAVOR" = "minimal" ] || [ "$WORKSPACE_FLAVOR" = "light" ]; then \
-        exit 0 ; \
-    fi && \
-    # New Python Libraries:
-    pip install --no-cache-dir \
-                # pyaudio \
-                lazycluster && \
-    # Cleanup
-    clean-layer.sh
-
-### END INCUBATION ZONE ###
-
 ### CONFIGURATION ###
 
 # Copy files into workspace
@@ -895,7 +635,7 @@ COPY resources/home/ $HOME/
 # Copy some configuration files
 COPY resources/ssh/ssh_config resources/ssh/sshd_config  /etc/ssh/
 COPY resources/nginx/nginx.conf /etc/nginx/nginx.conf
-COPY resources/config/xrdp.ini /etc/xrdp/xrdp.ini
+#COPY resources/config/xrdp.ini /etc/xrdp/xrdp.ini
 
 # Configure supervisor process
 COPY resources/supervisor/supervisord.conf /etc/supervisor/supervisord.conf
@@ -908,16 +648,6 @@ COPY resources/config/90assumeyes /etc/apt/apt.conf.d/
 # Monkey Patching novnc: Styling and added clipboard support. All changed sections are marked with CUSTOM CODE
 COPY resources/novnc/ $RESOURCES_PATH/novnc/
 
-RUN \
-    ## create index.html to forward automatically to `vnc.html`
-    # Needs to be run after patching
-    ln -s $RESOURCES_PATH/novnc/vnc.html $RESOURCES_PATH/novnc/index.html
-
-# Basic VNC Settings - no password
-ENV \
-    VNC_PW=vncpassword \
-    VNC_RESOLUTION=1600x900 \
-    VNC_COL_DEPTH=24
 
 # Configure Jupyter / JupyterLab
 # Add as jupyter system configuration
@@ -963,20 +693,6 @@ RUN \
 
 # Create Desktop Icons for Tooling
 COPY resources/icons $RESOURCES_PATH/icons
-
-RUN \
-    # ungit:
-    echo "[Desktop Entry]\nVersion=1.0\nType=Link\nName=Ungit\nComment=Git Client\nCategories=Development;\nIcon=/resources/icons/ungit-icon.png\nURL=http://localhost:8092/tools/ungit" > /usr/share/applications/ungit.desktop && \
-    chmod +x /usr/share/applications/ungit.desktop && \
-    # netdata:
-    echo "[Desktop Entry]\nVersion=1.0\nType=Link\nName=Netdata\nComment=Hardware Monitoring\nCategories=System;Utility;Development;\nIcon=/resources/icons/netdata-icon.png\nURL=http://localhost:8092/tools/netdata" > /usr/share/applications/netdata.desktop && \
-    chmod +x /usr/share/applications/netdata.desktop && \
-    # glances:
-    echo "[Desktop Entry]\nVersion=1.0\nType=Link\nName=Glances\nComment=Hardware Monitoring\nCategories=System;Utility;\nIcon=/resources/icons/glances-icon.png\nURL=http://localhost:8092/tools/glances" > /usr/share/applications/glances.desktop && \
-    chmod +x /usr/share/applications/glances.desktop && \
-    # Remove mail and logout desktop icons
-    rm /usr/share/applications/exo-mail-reader.desktop && \
-    rm /usr/share/applications/xfce4-session-logout.desktop
 
 # Copy resources into workspace
 COPY resources/tools $RESOURCES_PATH/tools
@@ -1108,4 +824,20 @@ CMD ["python", "/resources/docker-entrypoint.py"]
 # See supervisor.conf for more ports
 
 EXPOSE 8080
+EXPOSE 8000
 ###
+
+ADD sandbox_env.yml /temp/sandbox.yml
+RUN \
+   $CONDA_DIR/bin/conda env update -n base -f /temp/sandbox.yml && \
+   clean-layer.sh
+
+RUN \
+   $CONDA_DIR/bin/conda install pytorch torchvision cudatoolkit=10.1 -c pytorch && \
+   clean-layer.sh
+
+RUN \
+   $CONDA_DIR/bin/jupyter labextension update --all && \
+   jupyter lab build && \
+   clean-layer.sh
+
