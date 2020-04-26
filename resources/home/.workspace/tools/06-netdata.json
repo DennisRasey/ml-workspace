@@ -1,6 +1,0 @@
-{
-    "id": "netdata-link",
-    "name": "Netdata",
-    "url_path": "/tools/netdata/",
-    "description": "Monitor hardware resources"
-}
