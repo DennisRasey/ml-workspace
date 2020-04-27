@@ -82,6 +82,7 @@ jax
 jaxlib
 jellyfish
 jsonpickle
+jupyter-tensorboard
 kafka-python
 kaggle
 keract
