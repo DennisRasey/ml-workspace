@@ -31,6 +31,9 @@ RUN \
 COPY resources/scripts/clean-layer.sh  /usr/bin/clean-layer.sh
 COPY resources/scripts/fix-permissions.sh  /usr/bin/fix-permissions.sh
 
+# Create Desktop Icons for Tooling
+COPY resources/branding $RESOURCES_PATH/branding
+
  # Make clean-layer and fix-permissions executable
  RUN \
     chmod a+rwx /usr/bin/clean-layer.sh && \
@@ -101,7 +104,7 @@ RUN \
         # Search text and binary files
         yara \
         # Minimalistic C client for Redis
-        libhiredis-dev \
+        #libhiredis-dev \
         # postgresql client
         libpq-dev \
         # image processing library (6MB), required for tesseract
@@ -220,339 +223,19 @@ RUN \
     # Cleanup
     clean-layer.sh
 
+# Configure git
+RUN \
+    git config --global core.fileMode false && \
+    git config --global http.sslVerify false && \
+    # Use store or credentialstore instead? timout == 365 days validity
+    git config --global credential.helper 'cache --timeout=31540000'
+
+
 ENV PATH=/usr/local/openresty/nginx/sbin:$PATH
 
 COPY resources/nginx/lua-extensions /etc/nginx/nginx_plugins
 
 ### END BASICS ###
-
-### RUNTIMES ###
-# Install Miniconda: https://repo.continuum.io/miniconda/
-ENV \
-    CONDA_DIR=/opt/conda \
-    PYTHON_VERSION="3.7.6" \
-    CONDA_PYTHON_DIR=/opt/conda/lib/python3.7
-
-RUN CONDA_VERSION="4.7.12" && \
-    wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-${CONDA_VERSION}-Linux-x86_64.sh -O ~/miniconda.sh && \
-    /bin/bash ~/miniconda.sh -b -p $CONDA_DIR && \
-    export PATH=$CONDA_DIR/bin:$PATH && \
-    rm ~/miniconda.sh && \
-    # Update conda
-    $CONDA_DIR/bin/conda update -y -n base -c defaults conda && \
-    $CONDA_DIR/bin/conda update -y setuptools && \
-    $CONDA_DIR/bin/conda install -y conda-build && \
-    # Add conda forge - Append so that conda forge has lower priority than the main channel
-    $CONDA_DIR/bin/conda config --system --add channels conda-forge && \
-    $CONDA_DIR/bin/conda config --system --set auto_update_conda false && \
-    $CONDA_DIR/bin/conda config --system --set show_channel_urls true && \
-    # Update selected packages - install python 3.7.x
-    $CONDA_DIR/bin/conda install -y --update-all python=$PYTHON_VERSION && \
-    # Link Conda
-    ln -s $CONDA_DIR/bin/python /usr/local/bin/python && \
-    ln -s $CONDA_DIR/bin/conda /usr/bin/conda && \
-    # Update pip
-    $CONDA_DIR/bin/pip install --upgrade pip && \
-    chmod -R a+rwx /usr/local/bin/ && \
-    # Cleanup - Remove all here since conda is not in path as of now
-    # find /opt/conda/ -follow -type f -name '*.a' -delete && \
-    # find /opt/conda/ -follow -type f -name '*.js.map' -delete && \
-    $CONDA_DIR/bin/conda clean -y --packages && \
-    $CONDA_DIR/bin/conda clean -y -a -f  && \
-    $CONDA_DIR/bin/conda build purge-all && \
-    # Fix permissions
-    fix-permissions.sh $CONDA_DIR && \
-    clean-layer.sh
-
-ENV PATH=$CONDA_DIR/bin:$PATH
-
-# There is nothing added yet to LD_LIBRARY_PATH, so we can overwrite
-ENV LD_LIBRARY_PATH=$CONDA_DIR/lib 
-
-# Install node.js
-RUN \
-    apt-get update && \
-    # https://nodejs.org/en/about/releases/ use even numbered releases
-    curl -sL https://deb.nodesource.com/setup_12.x | sudo -E bash - && \
-    apt-get install -y nodejs && \
-    # As conda is first in path, the commands 'node' and 'npm' reference to the version of conda. 
-    # Replace those versions with the newly installed versions of node
-    rm -f /opt/conda/bin/node && ln -s /usr/bin/node /opt/conda/bin/node && \
-    rm -f /opt/conda/bin/npm && ln -s /usr/bin/npm /opt/conda/bin/npm && \
-    # Fix permissions
-    chmod a+rwx /usr/bin/node && \
-    chmod a+rwx /usr/bin/npm && \
-    # Fix node versions - put into own dir and before conda:
-    mkdir -p /opt/node/bin && \
-    ln -s /usr/bin/node /opt/node/bin/node && \
-    ln -s /usr/bin/npm /opt/node/bin/npm && \
-    # Install YARN
-    curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add - && \
-    echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends yarn && \
-    # Install typescript 
-    /usr/bin/npm install -g typescript && \
-    # Install webpack - 32 MB
-    /usr/bin/npm install -g webpack && \
-    # Cleanup
-    clean-layer.sh
-
-ENV PATH=/opt/node/bin:$PATH
-
-### END RUNTIMES ###
-
-### PROCESS TOOLS ###
-
-# Install supervisor for process supervision
-RUN \
-    apt-get update && \
-    # Create sshd run directory - required for starting process via supervisor
-    mkdir -p /var/run/sshd && chmod 400 /var/run/sshd && \
-    # Install rsyslog for syslog logging
-    apt-get install -y --no-install-recommends rsyslog && \
-    pip install --no-cache-dir --upgrade supervisor supervisor-stdout && \
-    # supervisor needs this logging path
-    mkdir -p /var/log/supervisor/ && \
-    # Cleanup
-    clean-layer.sh
-
-### END PROCESS TOOLS ###
-
-### GUI TOOLS ###
-
-# Add the defaults from /lib/x86_64-linux-gnu, otherwise lots of no version errors
-# cannot be added above otherwise there are errors in the installation of the gui tools
-# Call order: https://unix.stackexchange.com/questions/367600/what-is-the-order-that-linuxs-dynamic-linker-searches-paths-in
-#ENV LD_LIBRARY_PATH=/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:$CONDA_DIR/lib 
-
-## VS Code Server: https://github.com/codercom/code-server
-COPY resources/tools/vs-code-server.sh $RESOURCES_PATH/tools/vs-code-server.sh
-RUN \
-    /bin/bash $RESOURCES_PATH/tools/vs-code-server.sh --install && \
-    # Cleanup
-    clean-layer.sh
-
-# Install Visual Studio Code
-COPY resources/tools/vs-code-desktop.sh $RESOURCES_PATH/tools/vs-code-desktop.sh
-RUN \
-  /bin/bash $RESOURCES_PATH/tools/vs-code-desktop.sh --install && \
-  # Cleanup
-  clean-layer.sh
-
-### DATA SCIENCE BASICS ###
-
-## Python 3
-# Data science libraries requirements
-COPY resources/libraries ${RESOURCES_PATH}/libraries
-
-### Install main data science libs
-RUN \ 
-    # Link Conda - All python are linke to the conda instances 
-    # Linking python 3 crashes conda -> cannot install anyting - remove instead
-    #ln -s -f $CONDA_DIR/bin/python /usr/bin/python3 && \
-    # if removed -> cannot use add-apt-repository
-    # rm /usr/bin/python3 && \
-    # rm /usr/bin/python3.5
-    ln -s -f $CONDA_DIR/bin/python /usr/bin/python && \
-    apt-get update && \
-    # upgrade pip
-    pip install --upgrade pip && \
-    conda install -y --update-all mkl ; \
-    # Install some basics - required to run container
-    conda install -y --update-all \
-            'python='$PYTHON_VERSION \
-            tqdm \
-            pyzmq \
-            cython \
-            graphviz \
-            numpy \
-            matplotlib \
-            scipy \
-            requests \
-            urllib3 \
-            pandas \
-            six \
-            future \
-            protobuf \
-            zlib \
-            boost \
-            psutil \
-            PyYAML \
-            python-crontab \
-            ipykernel \
-            cmake \
-            joblib \
-            Pillow \
-            ipython= \
-            notebook \
-            jupyterlab \
-            # Selected by library evaluation
-            networkx \
-            click \
-            docutils \
-            imageio \
-            tabulate \
-            flask \
-            dill \
-            regex \
-            toolz \
-            jmespath && \
-    # Install minimal pip requirements
-    pip install --no-cache-dir --upgrade -r ${RESOURCES_PATH}/libraries/requirements-minimal.txt && \
-    # OpenMPI support
-    apt-get install -y --no-install-recommends libopenmpi-dev openmpi-bin && \
-    # Install mkl, mkl-include & mkldnn
-    conda install -y mkl-include && \
-    # TODO - Install was not working conda install -y -c mingfeima mkldnn && \
-    # Install numba
-    conda install -y numba && \
-    # Install tensorflow - cpu only -  mkl support
-    conda install -y 'tensorflow=2.0.*' && \
-    # Install pytorch - cpu only
-    conda install -y -c pytorch "pytorch==1.4.*"  torchvision cpuonly && \
-    # Install light pip requirements
-    pip install --no-cache-dir --upgrade -r ${RESOURCES_PATH}/libraries/requirements-light.txt && \
-    # libartals == 40MB liblapack-dev == 20 MB
-    apt-get install -y --no-install-recommends liblapack-dev libatlas-base-dev libeigen3-dev libblas-dev && \
-    # pandoc -> installs libluajit -> problem for openresty
-    # required for tesseract: 11MB - tesseract-ocr-dev?
-    apt-get install -y libtesseract-dev && \
-    # Install libjpeg turbo for speedup in image processing
-    conda install -y libjpeg-turbo && \
-    # Faiss - A library for efficient similarity search and clustering of dense vectors. 
-    conda install -y -c pytorch faiss-cpu && \
-    # Install full pip requirements
-    pip install --no-cache-dir --upgrade -r ${RESOURCES_PATH}/libraries/requirements-full.txt && \
-    # Setup Spacy
-    # Spacy - download and large language removal
-    python -m spacy download en && \
-    # Fix permissions
-    fix-permissions.sh $CONDA_DIR && \
-    # Cleanup
-    clean-layer.sh
-
-# Fix conda version
-RUN \
-    # Conda installs wrong node version - relink conda node to the actual node 
-    rm -f /opt/conda/bin/node && ln -s /usr/bin/node /opt/conda/bin/node && \
-    rm -f /opt/conda/bin/npm && ln -s /usr/bin/npm /opt/conda/bin/npm
-
-### END DATA SCIENCE BASICS ###
-
-### JUPYTER ###
-
-COPY \
-    resources/jupyter/start.sh \
-    resources/jupyter/start-notebook.sh \
-    resources/jupyter/start-singleuser.sh \
-    /usr/local/bin/
-
-# install jupyter extensions
-RUN \
-    # Activate and configure extensions
-    jupyter contrib nbextension install --user && \
-    # nbextensions configurator
-    jupyter nbextensions_configurator enable --user && \
-    # Active nbresuse
-    jupyter serverextension enable --py nbresuse && \
-    # Activate Jupytext
-    jupyter nbextension enable --py jupytext && \
-    # Disable Jupyter Server Proxy
-    jupyter nbextension disable jupyter_server_proxy/tree && \
-    # Configure nbdime
-    nbdime config-git --enable --global && \
-    # Enable useful extensions
-    jupyter nbextension enable skip-traceback/main && \
-    # jupyter nbextension enable comment-uncomment/main && \
-    # Do not enable variable inspector: causes trouble: https://github.com/ml-tooling/ml-workspace/issues/10
-    # jupyter nbextension enable varInspector/main && \
-    #jupyter nbextension enable spellchecker/main && \
-    jupyter nbextension enable toc2/main && \
-    jupyter nbextension enable execute_time/ExecuteTime && \
-    jupyter nbextension enable collapsible_headings/main && \
-    jupyter nbextension enable codefolding/main && \
-    # Activate Jupyter Tensorboard
-    jupyter tensorboard enable && \
-    # Edit notebook config
-    echo '{"nbext_hide_incompat": false}' > $HOME/.jupyter/nbconfig/common.json && \
-    cat $HOME/.jupyter/nbconfig/notebook.json | jq '.toc2={"moveMenuLeft": false,"widenNotebook": false,"skip_h1_title": false,"sideBar": true,"number_sections": false,"collapse_to_match_collapsible_headings": true}' > tmp.$$.json && mv tmp.$$.json $HOME/.jupyter/nbconfig/notebook.json && \
-    # Activate qgrid
-    jupyter nbextension enable --py --sys-prefix qgrid && \
-    # Activate Colab support
-    jupyter serverextension enable --py jupyter_http_over_ws && \
-    # Activate Voila Rendering 
-    # currently not working jupyter serverextension enable voila --sys-prefix && \
-    # Enable ipclusters
-    ipcluster nbextension enable && \
-    # Fix permissions? fix-permissions.sh $CONDA_DIR && \
-    # Cleanup
-    clean-layer.sh
-
-# install jupyterlab
-RUN \
-    # without es6-promise some extension builds fail
-    npm install -g es6-promise && \
-    # define alias command for jupyterlab extension installs with log prints to stdout
-    lab_ext_install='jupyter labextension install -y --debug-log-path=/dev/stdout --log-level=WARN --minimize=False ' && \
-    # jupyterlab installed in requirements section
-    $lab_ext_install @jupyter-widgets/jupyterlab-manager && \
-    $lab_ext_install @jupyterlab/toc && \
-    $lab_ext_install jupyterlab_tensorboard && \
-    # install jupyterlab git
-    $lab_ext_install @jupyterlab/git && \
-    pip install jupyterlab-git && \ 
-    jupyter serverextension enable --py jupyterlab_git && \
-    # For Matplotlib: https://github.com/matplotlib/jupyter-matplotlib
-    $lab_ext_install jupyter-matplotlib && \
-    # Install jupyterlab language server support
-    pip install --pre jupyter-lsp && \
-    $lab_ext_install @krassowski/jupyterlab-lsp && \
-    # For Plotly
-    #$lab_ext_install @jupyterlab/plotly-extension && \
-    # produces build error: jupyter labextension install jupyterlab-chart-editor && \
-    # For holoview
-    $lab_ext_install @pyviz/jupyterlab_pyviz && \
-    # Install jupyterlab variable inspector - https://github.com/lckr/jupyterlab-variableInspector
-    $lab_ext_install @lckr/jupyterlab_variableinspector && \
-    # Install jupyterlab code formattor - https://github.com/ryantam626/jupyterlab_code_formatter
-    $lab_ext_install @ryantam626/jupyterlab_code_formatter && \
-    pip install jupyterlab_code_formatter && \
-    jupyter serverextension enable --py jupyterlab_code_formatter && \
-    # Final build with minimization
-    jupyter lab build -y --debug-log-path=/dev/stdout --log-level=WARN && \
-    # Cleanup
-    # Clean jupyter lab cache: https://github.com/jupyterlab/jupyterlab/issues/4930
-    jupyter lab clean && \
-    jlpm cache clean && \
-    # Remove build folder -> should be remove by lab clean as well?
-    rm -rf $CONDA_DIR/share/jupyter/lab/staging && \
-    clean-layer.sh
-
-# Install Jupyter Tooling Extension
-COPY resources/jupyter/extensions $RESOURCES_PATH/jupyter-extensions
-
-RUN \
-    pip install --no-cache-dir $RESOURCES_PATH/jupyter-extensions/tooling-extension/ && \
-    # Cleanup
-    clean-layer.sh
-
-# Install and activate ZSH
-COPY resources/tools/oh-my-zsh.sh $RESOURCES_PATH/tools/oh-my-zsh.sh
-
-RUN \
-    # Install ZSH
-    /bin/bash $RESOURCES_PATH/tools/oh-my-zsh.sh --install && \
-    # Make zsh the default shell
-    # Initialize conda for command line activation
-    # TODO do not activate for now, opening the bash shell is a bit slow
-    # conda init bash && \
-    conda init zsh && \
-    chsh -s $(which zsh) $NB_USER && \
-    # Install sdkman - needs to be executed after zsh
-    curl -s https://get.sdkman.io | bash && \
-    # Cleanup
-    clean-layer.sh
 
 ### VSCODE ###
 
@@ -615,6 +298,155 @@ RUN \
 
 ### END VSCODE ###
 
+
+### RUNTIMES ###
+# Install Miniconda: https://repo.continuum.io/miniconda/
+ENV \
+    CONDA_DIR=/opt/conda \
+    PYTHON_VERSION="3.7.6" \
+    CONDA_PYTHON_DIR=/opt/conda/lib/python3.7
+
+RUN CONDA_VERSION="4.7.12" && \
+    wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-${CONDA_VERSION}-Linux-x86_64.sh -O ~/miniconda.sh && \
+    /bin/bash ~/miniconda.sh -b -p $CONDA_DIR && \
+    export PATH=$CONDA_DIR/bin:$PATH && \
+    rm ~/miniconda.sh && \
+    # Update conda
+    $CONDA_DIR/bin/conda update -y -n base -c defaults conda && \
+    $CONDA_DIR/bin/conda update -y setuptools && \
+    $CONDA_DIR/bin/conda install -y conda-build && \
+    # Add conda forge - Append so that conda forge has lower priority than the main channel
+    $CONDA_DIR/bin/conda config --system --add channels conda-forge && \
+    $CONDA_DIR/bin/conda config --system --set auto_update_conda false && \
+    $CONDA_DIR/bin/conda config --system --set show_channel_urls true && \
+    # Update selected packages - install python 3.7.x
+    $CONDA_DIR/bin/conda install -y --update-all python=$PYTHON_VERSION && \
+    # Link Conda
+    ln -s $CONDA_DIR/bin/python /usr/local/bin/python && \
+    ln -s -f $CONDA_DIR/bin/python /usr/bin/python && \
+    ln -s $CONDA_DIR/bin/conda /usr/bin/conda && \
+    # Update pip
+    $CONDA_DIR/bin/pip install --upgrade pip && \
+    chmod -R a+rwx /usr/local/bin/ && \
+    # Cleanup - Remove all here since conda is not in path as of now
+    # find /opt/conda/ -follow -type f -name '*.a' -delete && \
+    # find /opt/conda/ -follow -type f -name '*.js.map' -delete && \
+    $CONDA_DIR/bin/conda clean -y --packages && \
+    $CONDA_DIR/bin/conda clean -y -a -f  && \
+    $CONDA_DIR/bin/conda build purge-all && \
+    # Fix permissions
+    fix-permissions.sh $CONDA_DIR && \
+    clean-layer.sh
+
+ENV PATH=$CONDA_DIR/bin:$PATH
+
+# Install node.js
+RUN \
+    apt-get update && \
+    # https://nodejs.org/en/about/releases/ use even numbered releases
+    curl -sL https://deb.nodesource.com/setup_12.x | sudo -E bash - && \
+    apt-get install -y nodejs && \
+    # As conda is first in path, the commands 'node' and 'npm' reference to the version of conda.
+    # Replace those versions with the newly installed versions of node
+    rm -f /opt/conda/bin/node && ln -s /usr/bin/node /opt/conda/bin/node && \
+    rm -f /opt/conda/bin/npm && ln -s /usr/bin/npm /opt/conda/bin/npm && \
+    # Fix permissions
+    chmod a+rwx /usr/bin/node && \
+    chmod a+rwx /usr/bin/npm && \
+    # Fix node versions - put into own dir and before conda:
+    mkdir -p /opt/node/bin && \
+    ln -s /usr/bin/node /opt/node/bin/node && \
+    ln -s /usr/bin/npm /opt/node/bin/npm && \
+    # Install YARN
+    curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add - && \
+    echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends yarn && \
+    # Install typescript
+    /usr/bin/npm install -g typescript && \
+    # Install webpack - 32 MB
+    /usr/bin/npm install -g webpack && \
+    # Cleanup
+    clean-layer.sh
+
+
+# Install and activate ZSH
+COPY resources/tools/oh-my-zsh.sh $RESOURCES_PATH/tools/oh-my-zsh.sh
+
+RUN \
+    # Install ZSH
+    /bin/bash $RESOURCES_PATH/tools/oh-my-zsh.sh --install && \
+    # Make zsh the default shell
+    # Initialize conda for command line activation
+    # TODO do not activate for now, opening the bash shell is a bit slow
+    # conda init bash && \
+    conda init zsh && \
+    chsh -s $(which zsh) $NB_USER && \
+    # Install sdkman - needs to be executed after zsh
+    curl -s https://get.sdkman.io | bash && \
+    # Cleanup
+    clean-layer.sh
+
+
+
+# There is nothing added yet to LD_LIBRARY_PATH, so we can overwrite
+ENV LD_LIBRARY_PATH=$CONDA_DIR/lib 
+
+# Fix conda version
+RUN \
+    # Conda installs wrong node version - relink conda node to the actual node 
+    rm -f /opt/conda/bin/node && ln -s /usr/bin/node /opt/conda/bin/node && \
+    rm -f /opt/conda/bin/npm && ln -s /usr/bin/npm /opt/conda/bin/npm
+
+ENV PATH=/opt/node/bin:$PATH
+
+### END RUNTIMES ###
+
+
+# Install supervisor for process supervision
+RUN \
+    apt-get update && \
+    # Create sshd run directory - required for starting process via supervisor
+    mkdir -p /var/run/sshd && chmod 400 /var/run/sshd && \
+    # Install rsyslog for syslog logging
+    apt-get install -y --no-install-recommends rsyslog && \
+    pip install --no-cache-dir --upgrade supervisor supervisor-stdout && \
+    # supervisor needs this logging path
+    mkdir -p /var/log/supervisor/ && \
+    # Cleanup
+    clean-layer.sh
+
+
+### GUI TOOLS ###
+
+# Add the defaults from /lib/x86_64-linux-gnu, otherwise lots of no version errors
+# cannot be added above otherwise there are errors in the installation of the gui tools
+# Call order: https://unix.stackexchange.com/questions/367600/what-is-the-order-that-linuxs-dynamic-linker-searches-paths-in
+#ENV LD_LIBRARY_PATH=/lib/x86_64-linux-gnu:/usr/lib/x86_64-linux-gnu:$CONDA_DIR/lib 
+
+## VS Code Server: https://github.com/codercom/code-server
+COPY resources/tools/vs-code-server.sh $RESOURCES_PATH/tools/vs-code-server.sh
+RUN \
+    /bin/bash $RESOURCES_PATH/tools/vs-code-server.sh --install && \
+    # Cleanup
+    clean-layer.sh
+
+# Install Visual Studio Code
+COPY resources/tools/vs-code-desktop.sh $RESOURCES_PATH/tools/vs-code-desktop.sh
+RUN \
+  /bin/bash $RESOURCES_PATH/tools/vs-code-desktop.sh --install && \
+  # Cleanup
+  clean-layer.sh
+
+### DATA SCIENCE BASICS ###
+
+## Python 3
+# Data science libraries requirements
+COPY resources/libraries ${RESOURCES_PATH}/libraries
+
+# Install Jupyter Tooling Extension
+COPY resources/jupyter/extensions $RESOURCES_PATH/jupyter-extensions
+
 ### CONFIGURATION ###
 
 # Copy files into workspace
@@ -625,9 +457,6 @@ COPY \
 
 # Copy scripts into workspace
 COPY resources/scripts $RESOURCES_PATH/scripts
-
-# Create Desktop Icons for Tooling
-COPY resources/branding $RESOURCES_PATH/branding
 
 # Configure Home folder (e.g. xfce)
 COPY resources/home/ $HOME/
@@ -648,48 +477,8 @@ COPY resources/config/90assumeyes /etc/apt/apt.conf.d/
 # Monkey Patching novnc: Styling and added clipboard support. All changed sections are marked with CUSTOM CODE
 COPY resources/novnc/ $RESOURCES_PATH/novnc/
 
-
-# Configure Jupyter / JupyterLab
-# Add as jupyter system configuration
-COPY resources/jupyter/nbconfig /etc/jupyter/nbconfig
-COPY resources/jupyter/jupyter_notebook_config.py resources/jupyter/jupyter_notebook_config.json resources/jupyter/nbconfig /etc/jupyter/
-COPY resources/jupyter/sidebar.jupyterlab-settings $HOME/.jupyter/lab/user-settings/@jupyterlab/application-extension/
-COPY resources/jupyter/plugin.jupyterlab-settings $HOME/.jupyter/lab/user-settings/@jupyterlab/extensionmanager-extension/
-COPY resources/jupyter/ipython_config.py /etc/ipython/ipython_config.py
-
 # Add tensorboard patch - use tensorboard jupyter plugin instead of the actual tensorboard magic
 COPY resources/jupyter/tensorboard_notebook_patch.py $CONDA_PYTHON_DIR/site-packages/tensorboard/notebook.py
-
-# Branding of various components
-RUN \
-    # Jupyter Bradning
-    cp -f $RESOURCES_PATH/branding/logo.png $CONDA_PYTHON_DIR"/site-packages/notebook/static/base/images/logo.png" && \
-    cp -f $RESOURCES_PATH/branding/favicon.ico $CONDA_PYTHON_DIR"/site-packages/notebook/static/base/images/favicon.ico" && \
-    cp -f $RESOURCES_PATH/branding/favicon.ico $CONDA_PYTHON_DIR"/site-packages/notebook/static/favicon.ico" && \
-    # Fielbrowser Branding
-    mkdir -p $RESOURCES_PATH"/filebrowser/img/icons/" && \
-    cp -f $RESOURCES_PATH/branding/favicon.ico $RESOURCES_PATH"/filebrowser/img/icons/favicon.ico" && \
-    # Todo - use actual png
-    cp -f $RESOURCES_PATH/branding/favicon.ico $RESOURCES_PATH"/filebrowser/img/icons/favicon-32x32.png" && \
-    cp -f $RESOURCES_PATH/branding/favicon.ico $RESOURCES_PATH"/filebrowser/img/icons/favicon-16x16.png" && \
-    cp -f $RESOURCES_PATH/branding/ml-workspace-logo.svg $RESOURCES_PATH"/filebrowser/img/logo.svg"
-
-# Configure git
-RUN \
-    git config --global core.fileMode false && \
-    git config --global http.sslVerify false && \
-    # Use store or credentialstore instead? timout == 365 days validity
-    git config --global credential.helper 'cache --timeout=31540000'
-
-# Configure netdata
-COPY resources/netdata/ /etc/netdata/
-
-# Configure Matplotlib
-RUN \
-    # Import matplotlib the first time to build the font cache.
-    MPLBACKEND=Agg python -c "import matplotlib.pyplot" \
-    # Stop Matplotlib printing junk to the console on first load
-    sed -i "s/^.*Matplotlib is building the font cache using fc-list.*$/# Warning removed/g" $CONDA_PYTHON_DIR/site-packages/matplotlib/font_manager.py
 
 # Create Desktop Icons for Tooling
 COPY resources/icons $RESOURCES_PATH/icons
@@ -700,6 +489,12 @@ COPY resources/tests $RESOURCES_PATH/tests
 COPY resources/tutorials $RESOURCES_PATH/tutorials
 COPY resources/licenses $RESOURCES_PATH/licenses
 COPY resources/reports $RESOURCES_PATH/reports
+
+COPY \
+    resources/jupyter/start.sh \
+    resources/jupyter/start-notebook.sh \
+    resources/jupyter/start-singleuser.sh \
+    /usr/local/bin/
 
 # Various configurations
 RUN \
@@ -805,8 +600,6 @@ LABEL \
     "org.label-schema.vcs-ref"=$ARG_VCS_REF \
     "org.label-schema.build-date"=$ARG_BUILD_DATE
 
-# Removed - is run during startup since a few env variables are dynamically changed: RUN printenv > $HOME/.ssh/environment
-
 # This assures we have a volume mounted even if the user forgot to do bind mount.
 # So that they do not lose their data if they delete the container.
 # TODO: VOLUME [ "/workspace" ]
@@ -827,10 +620,57 @@ EXPOSE 8080
 EXPOSE 8000
 ###
 
+
+
+
+### Install main data science libs
+
+#######################################
+## just install jupyterlab & cbre deps
+#######################################
+
+### JUPYTER ###
+
+RUN \
+  $CONDA_DIR/bin/conda install -c conda-forge jupyterlab jupyter_contrib_nbextensions
+
+
+# Branding of various components
+RUN \
+    # Jupyter Branding
+    cp -f $RESOURCES_PATH/branding/logo.png $CONDA_PYTHON_DIR"/site-packages/notebook/static/base/images/logo.png" && \
+    cp -f $RESOURCES_PATH/branding/favicon.ico $CONDA_PYTHON_DIR"/site-packages/notebook/static/base/images/favicon.ico" && \
+    cp -f $RESOURCES_PATH/branding/favicon.ico $CONDA_PYTHON_DIR"/site-packages/notebook/static/favicon.ico" && \
+    # Fielbrowser Branding
+    mkdir -p $RESOURCES_PATH"/filebrowser/img/icons/" && \
+    cp -f $RESOURCES_PATH/branding/favicon.ico $RESOURCES_PATH"/filebrowser/img/icons/favicon.ico" && \
+    # Todo - use actual png
+    cp -f $RESOURCES_PATH/branding/favicon.ico $RESOURCES_PATH"/filebrowser/img/icons/favicon-32x32.png" && \
+    cp -f $RESOURCES_PATH/branding/favicon.ico $RESOURCES_PATH"/filebrowser/img/icons/favicon-16x16.png" && \
+    cp -f $RESOURCES_PATH/branding/ml-workspace-logo.svg $RESOURCES_PATH"/filebrowser/img/logo.svg"
+
+# Configure Jupyter / JupyterLab
+# Add as jupyter system configuration
+COPY resources/jupyter/nbconfig /etc/jupyter/nbconfig
+COPY resources/jupyter/jupyter_notebook_config.py resources/jupyter/jupyter_notebook_config.json resources/jupyter/nbconfig /etc/jupyter/
+COPY resources/jupyter/sidebar.jupyterlab-settings $HOME/.jupyter/lab/user-settings/@jupyterlab/application-extension/
+COPY resources/jupyter/plugin.jupyterlab-settings $HOME/.jupyter/lab/user-settings/@jupyterlab/extensionmanager-extension/
+COPY resources/jupyter/ipython_config.py /etc/ipython/ipython_config.py
+
+
 ADD sandbox_env.yml /temp/sandbox.yml
 RUN \
    $CONDA_DIR/bin/conda env update -n base -f /temp/sandbox.yml && \
    clean-layer.sh
+
+# Configure Matplotlib
+RUN \
+    # Import matplotlib the first time to build the font cache.
+    MPLBACKEND=Agg python -c "import matplotlib.pyplot" \
+    # Stop Matplotlib printing junk to the console on first load
+    sed -i "s/^.*Matplotlib is building the font cache using fc-list.*$/# Warning removed/g" $CONDA_PYTHON_DIR/site-packages/matplotlib/font_manager.py
+
+
 
 RUN \
    $CONDA_DIR/bin/conda install pytorch torchvision cudatoolkit=10.1 -c pytorch && \
@@ -840,4 +680,122 @@ RUN \
    $CONDA_DIR/bin/jupyter labextension update --all && \
    jupyter lab build && \
    clean-layer.sh
+
+
+#################################
+
+RUN \
+   apt-get update && \
+   apt-get install -y libtesseract-dev libboost-all-dev && \
+   clean-layer.sh
+
+
+
+RUN \
+   $CONDA_DIR/bin/conda install -y -c conda-forge libcurl
+
+
+RUN   $CONDA_DIR/bin/pip install -r ${RESOURCES_PATH}/libraries/requirements-minimal.txt
+RUN   $CONDA_DIR/bin/pip install -r ${RESOURCES_PATH}/libraries/requirements-light.txt
+RUN   $CONDA_DIR/bin/pip install -r ${RESOURCES_PATH}/libraries/requirements-full.txt
+RUN   clean-layer.sh
+
+#################################
+
+
+# install jupyter extensions
+RUN \
+    $CONDA_DIR/bin/conda install -c conda-forge nbresuse && \
+    # Activate and configure extensions
+    jupyter contrib nbextension install --user && \
+    # nbextensions configurator
+    jupyter nbextensions_configurator enable --user && \
+    # Active nbresuse
+    jupyter serverextension enable --py nbresuse && \
+    # Activate Jupytext
+    jupyter nbextension enable --py jupytext && \
+    # Disable Jupyter Server Proxy
+    jupyter nbextension disable jupyter_server_proxy/tree && \
+    # Configure nbdime
+    nbdime config-git --enable --global && \
+    # Enable useful extensions
+    jupyter nbextension enable skip-traceback/main && \
+    # jupyter nbextension enable comment-uncomment/main && \
+    # Do not enable variable inspector: causes trouble: https://github.com/ml-tooling/ml-workspace/issues/10
+    # jupyter nbextension enable varInspector/main && \
+    #jupyter nbextension enable spellchecker/main && \
+    jupyter nbextension enable toc2/main && \
+    jupyter nbextension enable execute_time/ExecuteTime && \
+    jupyter nbextension enable collapsible_headings/main && \
+    jupyter nbextension enable codefolding/main && \
+    # Activate Jupyter Tensorboard
+    jupyter tensorboard enable && \
+    # Edit notebook config
+    echo '{"nbext_hide_incompat": false}' > $HOME/.jupyter/nbconfig/common.json && \
+    cat $HOME/.jupyter/nbconfig/notebook.json | jq '.toc2={"moveMenuLeft": false,"widenNotebook": false,"skip_h1_title": false,"sideBar": true,"number_sections": false,"collapse_to_match_collapsible_headings": true}' > tmp.$$.json && mv tmp.$$.json $HOME/.jupyter/nbconfig/notebook.json && \
+    # Activate qgrid
+    jupyter nbextension enable --py --sys-prefix qgrid && \
+    # Activate Colab support
+    jupyter serverextension enable --py jupyter_http_over_ws && \
+    # Activate Voila Rendering
+    # currently not working jupyter serverextension enable voila --sys-prefix && \
+    # Enable ipclusters
+    ipcluster nbextension enable && \
+    # Fix permissions? fix-permissions.sh $CONDA_DIR && \
+    # Cleanup
+    clean-layer.sh
+
+##
+
+# install jupyterlab
+RUN \
+    # without es6-promise some extension builds fail
+    npm install -g es6-promise && \
+    # define alias command for jupyterlab extension installs with log prints to stdout
+    lab_ext_install='jupyter labextension install -y --debug-log-path=/dev/stdout --log-level=WARN --minimize=False ' && \
+    # jupyterlab installed in requirements section
+    $lab_ext_install @jupyter-widgets/jupyterlab-manager && \
+    $lab_ext_install @jupyterlab/toc && \
+    $lab_ext_install jupyterlab_tensorboard && \
+    # install jupyterlab git
+    $lab_ext_install @jupyterlab/git && \
+    pip install jupyterlab-git && \
+    jupyter serverextension enable --py jupyterlab_git && \
+    # For Matplotlib: https://github.com/matplotlib/jupyter-matplotlib
+    $lab_ext_install jupyter-matplotlib && \
+    # Install jupyterlab language server support
+    pip install --pre jupyter-lsp && \
+    $lab_ext_install @krassowski/jupyterlab-lsp && \
+    # For Plotly
+    #$lab_ext_install @jupyterlab/plotly-extension && \
+    # produces build error: jupyter labextension install jupyterlab-chart-editor && \
+    # For holoview
+    $lab_ext_install @pyviz/jupyterlab_pyviz && \
+    # Install jupyterlab variable inspector - https://github.com/lckr/jupyterlab-variableInspector
+    $lab_ext_install @lckr/jupyterlab_variableinspector && \
+    # Install jupyterlab code formattor - https://github.com/ryantam626/jupyterlab_code_formatter
+    $lab_ext_install @ryantam626/jupyterlab_code_formatter && \
+    pip install jupyterlab_code_formatter && \
+    jupyter serverextension enable --py jupyterlab_code_formatter && \
+    # Final build with minimization
+    jupyter lab build -y --debug-log-path=/dev/stdout --log-level=WARN && \
+    # Cleanup
+    # Clean jupyter lab cache: https://github.com/jupyterlab/jupyterlab/issues/4930
+    jupyter lab clean && \
+    jlpm cache clean && \
+    # Remove build folder -> should be remove by lab clean as well?
+    rm -rf $CONDA_DIR/share/jupyter/lab/staging && \
+    clean-layer.sh
+
+RUN \
+   jupyter labextension update --all && \
+   jupyter lab build && \
+   clean-layer.sh
+
+RUN \
+   pip install --no-cache-dir $RESOURCES_PATH/jupyter-extensions/tooling-extension/ && \
+    # Cleanup
+    clean-layer.sh
+
+COPY resources/home/ $HOME/
 
