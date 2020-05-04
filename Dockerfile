@@ -159,6 +159,8 @@ RUN \
         unp \
         libbz2-dev \
         liblzma-dev \
+        libtesseract-dev \
+        libboost-all-dev \
         zlib1g-dev && \
     chmod -R a+rwx /usr/local/bin/ && \
     # configure dynamic linker run-time bindings
@@ -244,9 +246,6 @@ COPY resources/nginx/lua-extensions /etc/nginx/nginx_plugins
 # Alternative install: /usr/local/bin/code-server --user-data-dir=$HOME/.config/Code/ --extensions-dir=$HOME/.vscode/extensions/ --install-extension ms-python-release && \
 RUN \
     # If minimal flavor -> exit here
-    if [ "$WORKSPACE_FLAVOR" = "minimal" ]; then \
-        exit 0 ; \
-    fi && \
     cd $RESOURCES_PATH && \
     mkdir -p $HOME/.vscode/extensions/ && \
     # Install python extension - (newer versions are 30MB bigger)
@@ -263,9 +262,6 @@ RUN \
     rm redhat.java-$VS_JAVA_VERSION.vsix && \
     mv extension $HOME/.vscode/extensions/redhat.java-$VS_JAVA_VERSION && \
     # If light flavor -> exit here
-    if [ "$WORKSPACE_FLAVOR" = "light" ]; then \
-        exit 0 ; \
-    fi && \
     # Install git lens: https://github.com/eamodio/vscode-gitlens
     VS_GITLENS_VERSION="10.2.0" && \
     wget --quiet --no-check-certificate https://github.com/eamodio/vscode-gitlens/releases/download/v$VS_GITLENS_VERSION/gitlens-$VS_GITLENS_VERSION.vsix && \
@@ -618,16 +614,8 @@ CMD ["python", "/resources/docker-entrypoint.py"]
 
 EXPOSE 8080
 EXPOSE 8000
-###
-
-
-
 
 ### Install main data science libs
-
-#######################################
-## just install jupyterlab & cbre deps
-#######################################
 
 ### JUPYTER ###
 
@@ -670,10 +658,12 @@ RUN \
     # Stop Matplotlib printing junk to the console on first load
     sed -i "s/^.*Matplotlib is building the font cache using fc-list.*$/# Warning removed/g" $CONDA_PYTHON_DIR/site-packages/matplotlib/font_manager.py
 
-
-
 RUN \
-   $CONDA_DIR/bin/conda install pytorch torchvision cudatoolkit=10.1 -c pytorch && \
+   $CONDA_DIR/bin/conda install \
+   pytorch \
+   torchvision \
+   libcurl \
+   cudatoolkit=10.1 -c pytorch && \
    clean-layer.sh
 
 RUN \
@@ -681,24 +671,11 @@ RUN \
    jupyter lab build && \
    clean-layer.sh
 
-
-#################################
-
 RUN \
-   apt-get update && \
-   apt-get install -y libtesseract-dev libboost-all-dev && \
+   $CONDA_DIR/bin/pip install -r ${RESOURCES_PATH}/libraries/requirements-minimal.txt && \
+   $CONDA_DIR/bin/pip install -r ${RESOURCES_PATH}/libraries/requirements-light.txt && \
+   $CONDA_DIR/bin/pip install -r ${RESOURCES_PATH}/libraries/requirements-full.txt && \
    clean-layer.sh
-
-
-
-RUN \
-   $CONDA_DIR/bin/conda install -y -c conda-forge libcurl
-
-
-RUN   $CONDA_DIR/bin/pip install -r ${RESOURCES_PATH}/libraries/requirements-minimal.txt
-RUN   $CONDA_DIR/bin/pip install -r ${RESOURCES_PATH}/libraries/requirements-light.txt
-RUN   $CONDA_DIR/bin/pip install -r ${RESOURCES_PATH}/libraries/requirements-full.txt
-RUN   clean-layer.sh
 
 #################################
 
@@ -708,40 +685,24 @@ RUN \
     $CONDA_DIR/bin/conda install -c conda-forge nbresuse && \
     # Activate and configure extensions
     jupyter contrib nbextension install --user && \
-    # nbextensions configurator
     jupyter nbextensions_configurator enable --user && \
-    # Active nbresuse
     jupyter serverextension enable --py nbresuse && \
-    # Activate Jupytext
     jupyter nbextension enable --py jupytext && \
     # Disable Jupyter Server Proxy
     jupyter nbextension disable jupyter_server_proxy/tree && \
-    # Configure nbdime
     nbdime config-git --enable --global && \
-    # Enable useful extensions
     jupyter nbextension enable skip-traceback/main && \
-    # jupyter nbextension enable comment-uncomment/main && \
-    # Do not enable variable inspector: causes trouble: https://github.com/ml-tooling/ml-workspace/issues/10
-    # jupyter nbextension enable varInspector/main && \
-    #jupyter nbextension enable spellchecker/main && \
     jupyter nbextension enable toc2/main && \
     jupyter nbextension enable execute_time/ExecuteTime && \
     jupyter nbextension enable collapsible_headings/main && \
     jupyter nbextension enable codefolding/main && \
-    # Activate Jupyter Tensorboard
     jupyter tensorboard enable && \
     # Edit notebook config
     echo '{"nbext_hide_incompat": false}' > $HOME/.jupyter/nbconfig/common.json && \
     cat $HOME/.jupyter/nbconfig/notebook.json | jq '.toc2={"moveMenuLeft": false,"widenNotebook": false,"skip_h1_title": false,"sideBar": true,"number_sections": false,"collapse_to_match_collapsible_headings": true}' > tmp.$$.json && mv tmp.$$.json $HOME/.jupyter/nbconfig/notebook.json && \
-    # Activate qgrid
     jupyter nbextension enable --py --sys-prefix qgrid && \
-    # Activate Colab support
     jupyter serverextension enable --py jupyter_http_over_ws && \
-    # Activate Voila Rendering
-    # currently not working jupyter serverextension enable voila --sys-prefix && \
-    # Enable ipclusters
     ipcluster nbextension enable && \
-    # Fix permissions? fix-permissions.sh $CONDA_DIR && \
     # Cleanup
     clean-layer.sh
 
