@@ -235,13 +235,9 @@ docker run -p 8080:8080 --cpus=8 --memory=16g --shm-size=1G drasey/ml-workspace:
 
 If a proxy is required, you can pass the proxy configuration via the `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` environment variables.
 
-### Workspace Flavors
-
-In addition to the main workspace image (`drasey/ml-workspace`), we provide other image flavors that extend the features or minimize the image size to support a variety of use cases.
-
 ### Multi-user setup
 
-The workspace is designed as a single-user development environment. For a multi-user setup, we recommend deploying [🧰 ML Hub](https://github.com/ml-tooling/ml-hub). ML Hub is based on JupyterHub with the task to spawn, manage, and proxy workspace instances for multiple users.
+The workspace is designed as a single-user development environment. For a multi-user setup, we recommend deploying [🧰 ML Hub](https://github.com/DennisRasey/ml-hub). ML Hub is based on JupyterHub with the task to spawn, manage, and proxy workspace instances for multiple users.
 
 <details>
 <summary>Deployment (click to expand...)</summary>
@@ -666,7 +662,7 @@ docker run --shm-size=2G drasey/ml-workspace:latest
 
 <summary><b>Multiprocessing code is unexpectedly slow </b> (click to expand...)</summary>
 
-In general, the performance of running code within Docker is [nearly identical](https://stackoverflow.com/questions/21889053/what-is-the-runtime-performance-cost-of-a-docker-container) compared to running it directly on the machine. However, in case you have limited the container's CPU quota (as explained in [this section](#limit-memory--cpu)), the container can still see the full count of CPU cores available on the machine and there is no technical way to prevent this. Many libraries and tools will use the full CPU count (e.g., via `os.cpu_count()`) to set the number of threads used for multiprocessing/-threading. This might cause the program to start more threads/processes than it can efficiently handle with the available CPU quota, which can tremendously slow down the overall performance. Therefore, it is important to set the available CPU count or the maximum number of threads explicitly to the configured CPU quota. The workspace provides capabilities to detect the number of available CPUs automatically, which are used to configure a variety of common libraries via environment variables such as `OMP_NUM_THREADS` or `MKL_NUM_THREADS`. It is also possible to explicitly set the number of available CPUs at container startup via the `MAX_NUM_THREADS` environment variable (see [configuration section](https://github.com/ml-tooling/ml-workspace#configuration-options)). The same environment variable can also be used to get the number of available CPUs at runtime.
+In general, the performance of running code within Docker is [nearly identical](https://stackoverflow.com/questions/21889053/what-is-the-runtime-performance-cost-of-a-docker-container) compared to running it directly on the machine. However, in case you have limited the container's CPU quota (as explained in [this section](#limit-memory--cpu)), the container can still see the full count of CPU cores available on the machine and there is no technical way to prevent this. Many libraries and tools will use the full CPU count (e.g., via `os.cpu_count()`) to set the number of threads used for multiprocessing/-threading. This might cause the program to start more threads/processes than it can efficiently handle with the available CPU quota, which can tremendously slow down the overall performance. Therefore, it is important to set the available CPU count or the maximum number of threads explicitly to the configured CPU quota. The workspace provides capabilities to detect the number of available CPUs automatically, which are used to configure a variety of common libraries via environment variables such as `OMP_NUM_THREADS` or `MKL_NUM_THREADS`. It is also possible to explicitly set the number of available CPUs at container startup via the `MAX_NUM_THREADS` environment variable (see [configuration section](https://github.com/DennisRasey/#configuration-options)). The same environment variable can also be used to get the number of available CPUs at runtime.
 
 Even though the automatic configuration capabilities of the workspace will fix a variety of inefficiencies, we still recommend configuring the number of available CPUs with all libraries explicitly. For example:
 
@@ -719,26 +715,6 @@ The OpenResty/Nginx binary package used within the workspace requires to run on 
 </details>
 
 ---
-
-<br>
-
-## Contributors
-
-[![](https://sourcerer.io/fame/LukasMasuch/ml-tooling/ml-workspace/images/0)](https://sourcerer.io/fame/LukasMasuch/ml-tooling/ml-workspace/links/0)[![](https://sourcerer.io/fame/LukasMasuch/ml-tooling/ml-workspace/images/1)](https://sourcerer.io/fame/LukasMasuch/ml-tooling/ml-workspace/links/1)[![](https://sourcerer.io/fame/LukasMasuch/ml-tooling/ml-workspace/images/2)](https://sourcerer.io/fame/LukasMasuch/ml-tooling/ml-workspace/links/2)[![](https://sourcerer.io/fame/LukasMasuch/ml-tooling/ml-workspace/images/3)](https://sourcerer.io/fame/LukasMasuch/ml-tooling/ml-workspace/links/3)[![](https://sourcerer.io/fame/LukasMasuch/ml-tooling/ml-workspace/images/4)](https://sourcerer.io/fame/LukasMasuch/ml-tooling/ml-workspace/links/4)[![](https://sourcerer.io/fame/LukasMasuch/ml-tooling/ml-workspace/images/5)](https://sourcerer.io/fame/LukasMasuch/ml-tooling/ml-workspace/links/5)[![](https://sourcerer.io/fame/LukasMasuch/ml-tooling/ml-workspace/images/6)](https://sourcerer.io/fame/LukasMasuch/ml-tooling/ml-workspace/links/6)[![](https://sourcerer.io/fame/LukasMasuch/ml-tooling/ml-workspace/images/7)](https://sourcerer.io/fame/LukasMasuch/ml-tooling/ml-workspace/links/7)
-
----
-
-<br>
-
-## Contribution
-
-- Pull requests are encouraged and always welcome. Read [`CONTRIBUTING.md`](https://github.com/ml-tooling/ml-workspace/tree/master/CONTRIBUTING.md) and check out [help-wanted](https://github.com/ml-tooling/ml-workspace/issues?utf8=%E2%9C%93&q=is%3Aopen+is%3Aissue+label%3A"help+wanted"+sort%3Areactions-%2B1-desc+) issues.
-- Submit Github issues for any [feature enhancements](https://github.com/ml-tooling/ml-workspace/issues/new?assignees=&labels=feature-request&template=02_feature-request.md&title=), [bugs](https://github.com/ml-tooling/ml-workspace/issues/new?assignees=&labels=bug&template=01_bug-report.md&title=), or [documentation](https://github.com/ml-tooling/ml-workspace/issues/new?assignees=&labels=enhancement%2C+docs&template=03_documentation.md&title=) problems. 
-- By participating in this project, you agree to abide by its [Code of Conduct](https://github.com/ml-tooling/ml-workspace/tree/master/CODE_OF_CONDUCT.md).
-
-<details>
-
-<summary>Development instructions for contributors (click to expand...)</summary>
 
 ### Build
 
