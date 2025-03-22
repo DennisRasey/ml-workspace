@@ -150,7 +150,7 @@ pytesseract
 pytextrank
 python-language-server
 pytorch-ignite
-pytorch-lightning==0.7.3
+pytorch-lightning==2.4.0
 pytorch-nlp
 ranger-fm
 records
